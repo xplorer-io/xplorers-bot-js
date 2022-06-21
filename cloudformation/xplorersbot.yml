@@ -1,0 +1,88 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Xplorers Bot Js
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  StageName:
+    Description: Http Api Stage Name
+    Type: String
+
+Resources:
+  XplorersBot:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda.zip
+      Handler: main.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Runtime: nodejs16.x
+      Events:
+        CallXplorersBotFunction:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref XplorersBotHttpApi
+            Method: POST
+            Path: /xplorersbot
+            TimeoutInMillis: 15000
+            RouteSettings:
+              ThrottlingBurstLimit: 10
+      Policies:
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource:
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/xplorersbot*
+
+  XplorersBotEventInvokeConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref XplorersBot
+      Qualifier: $LATEST
+      MaximumRetryAttempts: 0
+      MaximumEventAgeInSeconds: 60
+
+  XplorersBotLambdaFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Join ["", ["/aws/lambda/", !Ref XplorersBot]]
+      RetentionInDays: 3
+
+  XplorersBotHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref StageName
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 10
+        ThrottlingRateLimit: 10
+      RouteSettings:
+        "POST /xplorersbot":
+          ThrottlingBurstLimit: 10 # overridden in HttpApi Event
+          DetailedMetricsEnabled: True
+      FailOnWarnings: True
+      CorsConfiguration:
+        AllowMethods:
+          - POST
+        AllowOrigins:
+          - "*"
+          # - "https://api.slack.com/robots"
+
+  XplorersBotHttpApiUrlParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: HTTP API URL stored in SSM parameter
+      Type: String
+      Name: /xplorersbot/http-api/url
+      Value: !Sub https://${XplorersBotHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${StageName}/
+
+Outputs:
+  HttpApiUrl:
+    Description: URL of the API endpoint - This URL is invoked by Slack
+    Value: !Sub https://${XplorersBotHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${StageName}/
+
+  HttpApiId:
+    Description: Api id of HttpApi
+    Value:
+      Ref: XplorersBotHttpApi
