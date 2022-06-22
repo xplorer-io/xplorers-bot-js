@@ -1,5 +1,14 @@
 
 exports.lambda_handler = async function (event, context) {
-    console.log("EVENT: \n" + JSON.stringify(event, null, 2))
-    return context.logStreamName
+    const request = JSON.stringify(event)
+    console.log("EVENT IS: \n" + request)
+
+    // Parse the slack request body
+    const requestBody = JSON.parse(event.body)
+
+    if ("challenge" in requestBody)
+    {
+        return requestBody.challenge
+    }
+    console.log("No challenge token found, moving on!")
 }
